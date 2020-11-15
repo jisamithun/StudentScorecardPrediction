@@ -1,0 +1,120 @@
+#Random Forest Regression
+library(randomForest)
+library(mlbench)
+library(caret)
+
+#cannot allocate vector of size…
+memory.limit(size=8000)
+
+# Load Dataset
+na.exclude(ChosenData_Lesser_Fields)
+ChosenData_sample <- sample(1:nrow(ChosenData_Lesser_Fields), size=round(0.7*nrow(ChosenData_Lesser_Fields)), replace=FALSE)
+
+train <- ChosenData_Lesser_Fields[ChosenData_sample,]  #Only takes rows that are in samp
+test <- ChosenData_Lesser_Fields[-ChosenData_sample,]  #Omits the rows that were in samp
+dim(train)
+dim(test)
+
+# Create model with default parameters
+#Testing algorithm
+control <- trainControl(method="repeatedcv", number=10, repeats=10)
+seed <- 123
+metric <- "Accuracy"
+set.seed(seed)
+mtry <- sqrt(ncol(train))
+tunegrid <- expand.grid(.mtry=mtry)
+rf_default <- train(md_earn_wne_p6~.,
+                    data=train,
+                    method="rf",
+                    tuneGrid=tunegrid,
+                    na.action=na.omit) 
+                    #na.action=na.roughfix exchanges remaining NA values with the mean of the column
+
+print(rf_default)
+
+# Random Search
+#This can be good if we are unsure of what the value might be and we want to overcome any biases we may have for setting the parameter
+#control <- trainControl(method="repeatedcv",number=10,repeats=10,search="random")
+set.seed(seed)
+mtry <- sqrt(ncol(train))
+rf_random <- train(md_earn_wne_p6~.,
+                   data=train, method="rf",
+                   tuneLength=15,
+                   na.action=na.omit)
+print(rf_random)
+plot(rf_random)
+
+#Grid Search
+#Each axis of the grid is an algorithm parameter
+#points in the grid are specific combinations of parameters
+#we are only tuning one parameter, the grid search is a linear search through a vector of candidate values.
+
+control <- trainControl(method="repeatedcv", number=10, repeats=10, search="grid")
+set.seed(seed)
+tunegrid <- expand.grid(.mtry=c(1:15))
+rf_gridsearch <- train(md_earn_wne_p6~.,
+                       data=train,
+                       method="rf",
+                       tuneGrid=tunegrid,
+                       na.action=na.omit)
+print(rf_gridsearch)
+plot(rf_gridsearch)
+
+# Algorithm Tune (tuneRF) - TOOL
+set.seed(seed)
+bestmtry <- tuneRF(train, test, stepFactor=1.5, improve=1e-5, ntree=500)
+print(bestmtry)
+
+#Parameter Search
+#creating many caret models and passing in a different parameters directly to the algorithm manually
+# Manual Search
+control <- trainControl(method="repeatedcv", number=10, repeats=10, search="grid")
+tunegrid <- expand.grid(.mtry=c(sqrt(ncol(train))))
+modellist <- list()
+for (ntree in c(1000, 1500, 2000, 2500)) {
+  set.seed(seed)
+  fit <- train(md_earn_wne_p6~.,
+               data=train,
+               method="rf",
+               metric=metric,
+               tuneGrid=tunegrid,
+               trControl=control,
+               ntree=ntree)
+  key <- toString(ntree)
+  modellist[[key]] <- fit
+}
+# compare results
+results <- resamples(modellist)
+summary(results)
+dotplot(results)
+
+#Modified model that supports multiple tuning of multiple parameters
+customRF <- list(type = "Classification", library = "randomForest", loop = NULL)
+customRF$parameters <- data.frame(parameter = c("mtry", "ntree"), class = rep("numeric", 2), label = c("mtry", "ntree"))
+customRF$grid <- function(train, test, len = NULL, search = "grid") {}
+customRF$fit <- function(train, test, md_earn_wne_p6,md_earn_wne_p8,md_earn_wne_p10) 
+  {
+  randomForest(train, test, mtry = param$mtry, 
+                            ntree=md_earn_wne_p6$ntree,
+                            ntree=md_earn_wne_p8$ntree,
+                            ntree=md_earn_wne_p10$ntree)
+  }
+customRF$predict <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  predict(modelFit, newdata)
+customRF$prob <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
+  predict(modelFit, newdata, type = "prob")
+customRF$sort <- function(train) train[order(train[,1]),]
+customRF$levels <- function(train) train$classes
+
+#Tuning different values for ntree and mtry
+# train model
+control <- trainControl(method="repeatedcv", number=10, repeats=10)
+tunegrid <- expand.grid(.mtry=c(1:15), .ntree=c(1000, 1500, 2000, 2500))
+set.seed(seed)
+custom <- train(ntree=md_earn_wne_p6~.,
+                data=train,
+                method=customRF,
+                tuneGrid=tunegrid,
+                trControl=control)
+summary(custom)
+plot(custom)
