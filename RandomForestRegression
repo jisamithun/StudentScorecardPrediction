@@ -1,120 +1,187 @@
+
+#solving 'cannot allocate vector of size'
+install.packages("devtools", dependencies = TRUE)
+devtools::install_github("krlmlr/ulimit")
+memory.limit(size=12000)
+
+library(tidyverse)
+library(naniar)
+library(visdat)
+library(funModeling)
+library(Hmisc)
+library(ggplot2)
+library(corrplot)
+library(dplyr)
+library(broom)
+######################################################################
+
+##Read CSV
+write.csv(PP_Dataset, "PP_Dataset.csv", row.names = FALSE)
+library(readr)
+PP_Dataset <- read_csv("PP_Dataset.csv")
+View(PP_Dataset)
+summary(clean_data)
+clean_data_rf <- PP_Dataset[,c(17:33)] #leaving out the encoded binary variables for more performance and Salary class which is not a numeric field
+
+
 #Random Forest Regression
 library(randomForest)
 library(mlbench)
+library(ranger)
+library(e1071)
+library(rpart)
 library(caret)
 
-#cannot allocate vector of size…
-memory.limit(size=8000)
+# Load Dataset and Splitting data
 
-# Load Dataset
-na.exclude(ChosenData_Lesser_Fields)
-ChosenData_sample <- sample(1:nrow(ChosenData_Lesser_Fields), size=round(0.7*nrow(ChosenData_Lesser_Fields)), replace=FALSE)
+ChosenData_Standardization <- as.data.frame(scale(clean_data_rf)) #Scaling Data
+ChosenData_sample <- sample(1:nrow(clean_data_rf), size=round(0.7*nrow(clean_data_rf)), replace=FALSE)
 
-train <- ChosenData_Lesser_Fields[ChosenData_sample,]  #Only takes rows that are in samp
-test <- ChosenData_Lesser_Fields[-ChosenData_sample,]  #Omits the rows that were in samp
+train <- ChosenData_Standardization[ChosenData_sample,]  #Only takes rows that are in sample
+test <- ChosenData_Standardization[-ChosenData_sample,]  #Omits the rows that were in sample
+
+#Checking if the split has been executed correctly
 dim(train)
 dim(test)
 
+#checking if values have been scaled
+head(train)
+head(test)
+
+#Plotting  train and test sets to check that data is evenly distributed across the graph
+ggplot() +
+  geom_point(data=train,aes(md_earn_wne_p10,TUITFTE,color='teal')) +
+  geom_point(data=test,aes(md_earn_wne_p10,TUITFTE,color='red'))+
+  ggtitle("Train Set: teal   Test Set: red") +
+  theme(plot.title = element_text(hjust = 0.5)) #0.5 centering title
+
+
+rf(inputs)
+rf(default)
+rf(random)
+rf(grid)
+##################################################################################################################################################
+
 # Create model with default parameters
 #Testing algorithm
-control <- trainControl(method="repeatedcv", number=10, repeats=10)
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
 seed <- 123
 metric <- "Accuracy"
 set.seed(seed)
 mtry <- sqrt(ncol(train))
 tunegrid <- expand.grid(.mtry=mtry)
-rf_default <- train(md_earn_wne_p6~.,
+rf_default <- train(md_earn_wne_p10~.,
                     data=train,
-                    method="rf",
-                    tuneGrid=tunegrid,
-                    na.action=na.omit) 
-                    #na.action=na.roughfix exchanges remaining NA values with the mean of the column
+                    method="ranger",
+                    trControl=control) 
+print(rf_default)  
+ggplot(rf_default)
 
-print(rf_default)
+#Default prediction 
+predicted_rf_default <- predict(rf_default,type="raw", newdata = test)
+print(predicted_rf_default)
+plot(predicted_rf_default)
+
+
+R2(predicted_rf_default,test)
+RMSE(predicted_rf_default,test)
+#MAE(pred_rf_default,test)
+#RMSE(pred_rf_default,test)
+
+###pred_default <- table(pred_rf_default)
+###print(pred_default)
+
+#Identifying the 5 most important variables
+rf_default$md_earn_wne_p10.importance %>%
+  tidy()%>%
+  dplyr::arrange(desc(train)) %>%
+  dplyr::top_n(5) %>%
+  ggplot(aes(reorder(names,x),x)) +
+  geom_col() +
+  ggtitle("Top 5 important variables")
 
 # Random Search
 #This can be good if we are unsure of what the value might be and we want to overcome any biases we may have for setting the parameter
-#control <- trainControl(method="repeatedcv",number=10,repeats=10,search="random")
+control <- trainControl(method="repeatedcv",number=10,repeats=3,search="random")
 set.seed(seed)
 mtry <- sqrt(ncol(train))
-rf_random <- train(md_earn_wne_p6~.,
-                   data=train, method="rf",
+rf_random <- train(md_earn_wne_p10~.,
+                   data=train, 
+                   method="ranger",
                    tuneLength=15,
-                   na.action=na.omit)
+                   trControl=control)
 print(rf_random)
-plot(rf_random)
+ggplot(rf_random)
+actual <- test
+print(actual)
+
+pred_rf_random <- predict(rf_random, type = "raw", newdata=actual)
+print(pred_rf_random)
+plot(pred_rf_random)
+
+R2(pred_rf_random,test)
+MAE(pred_rf_random,test)
+RMSE(pred_rf_random,test)
 
 #Grid Search
 #Each axis of the grid is an algorithm parameter
 #points in the grid are specific combinations of parameters
 #we are only tuning one parameter, the grid search is a linear search through a vector of candidate values.
 
-control <- trainControl(method="repeatedcv", number=10, repeats=10, search="grid")
+control <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid")
 set.seed(seed)
-tunegrid <- expand.grid(.mtry=c(1:15))
-rf_gridsearch <- train(md_earn_wne_p6~.,
+mtry <- sqrt(ncol(train))
+tunegrid <- expand.grid(.mtry=c(1:16))
+rf_gridsearch <- train(md_earn_wne_p10~.,
                        data=train,
-                       method="rf",
-                       tuneGrid=tunegrid,
-                       na.action=na.omit)
+                       method="ranger",
+                       trControl=control)
 print(rf_gridsearch)
-plot(rf_gridsearch)
+ggplot(rf_gridsearch)
+
+predicted_rf_search <- predict(rf_gridsearch,type="raw", newdata=test)
+print(predicted_rf_search)
+plot(predicted_rf_search)
+
+
+R2(predicted_rf_search,test)
+MAE(predicted_rf_search,test)
+RMSE(pred_rf_search,test)
 
 # Algorithm Tune (tuneRF) - TOOL
 set.seed(seed)
-bestmtry <- tuneRF(train, test, stepFactor=1.5, improve=1e-5, ntree=500)
+bestmtry <- tuneRF(md_earn_wne_p10~.,train, stepFactor=1.5, improve=1e-5, ntree=500)
 print(bestmtry)
 
 #Parameter Search
 #creating many caret models and passing in a different parameters directly to the algorithm manually
 # Manual Search
-control <- trainControl(method="repeatedcv", number=10, repeats=10, search="grid")
+control <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid")
 tunegrid <- expand.grid(.mtry=c(sqrt(ncol(train))))
 modellist <- list()
-for (ntree in c(1000, 1500, 2000, 2500)) {
+
+for (ntree in c(1000, 1500, 2000)) 
+{
   set.seed(seed)
-  fit <- train(md_earn_wne_p6~.,
+  fit <- train(md_earn_wne_p10~.,
                data=train,
                method="rf",
-               metric=metric,
-               tuneGrid=tunegrid,
                trControl=control,
+               tuneGrid=tunegrid,
                ntree=ntree)
   key <- toString(ntree)
   modellist[[key]] <- fit
 }
+
 # compare results
 results <- resamples(modellist)
 summary(results)
 dotplot(results)
 
-#Modified model that supports multiple tuning of multiple parameters
-customRF <- list(type = "Classification", library = "randomForest", loop = NULL)
-customRF$parameters <- data.frame(parameter = c("mtry", "ntree"), class = rep("numeric", 2), label = c("mtry", "ntree"))
-customRF$grid <- function(train, test, len = NULL, search = "grid") {}
-customRF$fit <- function(train, test, md_earn_wne_p6,md_earn_wne_p8,md_earn_wne_p10) 
-  {
-  randomForest(train, test, mtry = param$mtry, 
-                            ntree=md_earn_wne_p6$ntree,
-                            ntree=md_earn_wne_p8$ntree,
-                            ntree=md_earn_wne_p10$ntree)
-  }
-customRF$predict <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
-  predict(modelFit, newdata)
-customRF$prob <- function(modelFit, newdata, preProc = NULL, submodels = NULL)
-  predict(modelFit, newdata, type = "prob")
-customRF$sort <- function(train) train[order(train[,1]),]
-customRF$levels <- function(train) train$classes
+#Predicting rf fit 
+pred_p10 = predict(fit, type="raw", newdata = test)
+print(pred_p10)
+plot(pred_p10)
 
-#Tuning different values for ntree and mtry
-# train model
-control <- trainControl(method="repeatedcv", number=10, repeats=10)
-tunegrid <- expand.grid(.mtry=c(1:15), .ntree=c(1000, 1500, 2000, 2500))
-set.seed(seed)
-custom <- train(ntree=md_earn_wne_p6~.,
-                data=train,
-                method=customRF,
-                tuneGrid=tunegrid,
-                trControl=control)
-summary(custom)
-plot(custom)
+
+
