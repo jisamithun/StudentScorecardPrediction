@@ -1,9 +1,29 @@
+#Random Forest
+#Main
+rf(memory)
+rf(packages)
+rf(read)
+################################################################################
+rf(splitdata)
+rf(inputs)
+################################################################################
+rf(default)
+rf(random)
+rf(grid)
+################################################################################
+rf(predictions)
 
-#solving 'cannot allocate vector of size'
+#Functions
+rf <-function(memory)
+{
+#Solving 'cannot allocate vector of size'. Taking additional storage from HDD to execute as RAM might not be enough 
 install.packages("devtools", dependencies = TRUE)
 devtools::install_github("krlmlr/ulimit")
-memory.limit(size=12000)
+memory.limit(size=12000) #in MB
+}
 
+rf <- function(packages)
+{
 library(tidyverse)
 library(naniar)
 library(visdat)
@@ -13,27 +33,29 @@ library(ggplot2)
 library(corrplot)
 library(dplyr)
 library(broom)
-######################################################################
-
-##Read CSV
-write.csv(PP_Dataset, "PP_Dataset.csv", row.names = FALSE)
-library(readr)
-PP_Dataset <- read_csv("PP_Dataset.csv")
-View(PP_Dataset)
-summary(clean_data)
-clean_data_rf <- PP_Dataset[,c(17:33)] #leaving out the encoded binary variables for more performance and Salary class which is not a numeric field
-
-
-#Random Forest Regression
-library(randomForest)
+#Random Forest Packages
+library(randomForest) 
 library(mlbench)
 library(ranger)
 library(e1071)
 library(rpart)
 library(caret)
+}
+  
+rf <- function(read)
+{
+##Read CSV
+write.csv(Modelling_Dataset, "Dataset_for_Modelling", row.names = FALSE)
+library(readr)
+Modelling_Dataset <- read_csv("Dataset_for_Modelling.csv")
+View(Modelling_Dataset)
+summary(Modelling_Dataset)
+clean_data_rf <- Modelling_Dataset[,c(1:30)] #leaving out the encoded binary variables for more performance and Salary class which is not a numeric field
+}
 
+rf <- function(splitdata)
+{
 # Load Dataset and Splitting data
-
 ChosenData_Standardization <- as.data.frame(scale(clean_data_rf)) #Scaling Data
 ChosenData_sample <- sample(1:nrow(clean_data_rf), size=round(0.7*nrow(clean_data_rf)), replace=FALSE)
 
@@ -50,25 +72,26 @@ head(test)
 
 #Plotting  train and test sets to check that data is evenly distributed across the graph
 ggplot() +
-  geom_point(data=train,aes(md_earn_wne_p10,TUITFTE,color='teal')) +
-  geom_point(data=test,aes(md_earn_wne_p10,TUITFTE,color='red'))+
+  geom_point(data=train,aes(md_earn_wne_p10,PCTFLOAN,color='teal')) +
+  geom_point(data=test,aes(md_earn_wne_p10,PCTFLOAN,color='red'))+
   ggtitle("Train Set: teal   Test Set: red") +
   theme(plot.title = element_text(hjust = 0.5)) #0.5 centering title
+}
 
-
-rf(inputs)
-rf(default)
-rf(random)
-rf(grid)
 ##################################################################################################################################################
 
-# Create model with default parameters
+#Create model with default parameters
 #Testing algorithm
-control <- trainControl(method="repeatedcv", number=10, repeats=3)
+rf <- function(inputs)
+{
 seed <- 123
-metric <- "Accuracy"
 set.seed(seed)
 mtry <- sqrt(ncol(train))
+}
+
+rf <- function(default)
+{
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
 tunegrid <- expand.grid(.mtry=mtry)
 rf_default <- train(md_earn_wne_p10~.,
                     data=train,
@@ -76,35 +99,12 @@ rf_default <- train(md_earn_wne_p10~.,
                     trControl=control) 
 print(rf_default)  
 ggplot(rf_default)
-
-#Default prediction 
-predicted_rf_default <- predict(rf_default,type="raw", newdata = test)
-print(predicted_rf_default)
-plot(predicted_rf_default)
-
-
-R2(predicted_rf_default,test)
-RMSE(predicted_rf_default,test)
-#MAE(pred_rf_default,test)
-#RMSE(pred_rf_default,test)
-
-###pred_default <- table(pred_rf_default)
-###print(pred_default)
-
-#Identifying the 5 most important variables
-rf_default$md_earn_wne_p10.importance %>%
-  tidy()%>%
-  dplyr::arrange(desc(train)) %>%
-  dplyr::top_n(5) %>%
-  ggplot(aes(reorder(names,x),x)) +
-  geom_col() +
-  ggtitle("Top 5 important variables")
+}
 
 # Random Search
-#This can be good if we are unsure of what the value might be and we want to overcome any biases we may have for setting the parameter
+rf <- function(random)
+{
 control <- trainControl(method="repeatedcv",number=10,repeats=3,search="random")
-set.seed(seed)
-mtry <- sqrt(ncol(train))
 rf_random <- train(md_earn_wne_p10~.,
                    data=train, 
                    method="ranger",
@@ -112,76 +112,65 @@ rf_random <- train(md_earn_wne_p10~.,
                    trControl=control)
 print(rf_random)
 ggplot(rf_random)
-actual <- test
-print(actual)
+}
 
-pred_rf_random <- predict(rf_random, type = "raw", newdata=actual)
-print(pred_rf_random)
-plot(pred_rf_random)
-
-R2(pred_rf_random,test)
-MAE(pred_rf_random,test)
-RMSE(pred_rf_random,test)
 
 #Grid Search
-#Each axis of the grid is an algorithm parameter
-#points in the grid are specific combinations of parameters
-#we are only tuning one parameter, the grid search is a linear search through a vector of candidate values.
-
+rf <- function(grid)
+{
 control <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid")
-set.seed(seed)
-mtry <- sqrt(ncol(train))
-tunegrid <- expand.grid(.mtry=c(1:16))
+tunegrid <- expand.grid(.mtry=c(1:30))
 rf_gridsearch <- train(md_earn_wne_p10~.,
                        data=train,
                        method="ranger",
                        trControl=control)
 print(rf_gridsearch)
 ggplot(rf_gridsearch)
-
-predicted_rf_search <- predict(rf_gridsearch,type="raw", newdata=test)
-print(predicted_rf_search)
-plot(predicted_rf_search)
-
-
-R2(predicted_rf_search,test)
-MAE(predicted_rf_search,test)
-RMSE(pred_rf_search,test)
-
-# Algorithm Tune (tuneRF) - TOOL
-set.seed(seed)
-bestmtry <- tuneRF(md_earn_wne_p10~.,train, stepFactor=1.5, improve=1e-5, ntree=500)
-print(bestmtry)
-
-#Parameter Search
-#creating many caret models and passing in a different parameters directly to the algorithm manually
-# Manual Search
-control <- trainControl(method="repeatedcv", number=10, repeats=3, search="grid")
-tunegrid <- expand.grid(.mtry=c(sqrt(ncol(train))))
-modellist <- list()
-
-for (ntree in c(1000, 1500, 2000)) 
-{
-  set.seed(seed)
-  fit <- train(md_earn_wne_p10~.,
-               data=train,
-               method="rf",
-               trControl=control,
-               tuneGrid=tunegrid,
-               ntree=ntree)
-  key <- toString(ntree)
-  modellist[[key]] <- fit
 }
 
-# compare results
-results <- resamples(modellist)
-summary(results)
-dotplot(results)
+rf <- function(predictions)
+{
+  #Default prediction 
+  predicted_rf_default <- predict(rf_default,type="raw", newdata = test)
+  summary(predicted_rf_default)
 
-#Predicting rf fit 
-pred_p10 = predict(fit, type="raw", newdata = test)
-print(pred_p10)
-plot(pred_p10)
+  defaultR2 <- R2(predicted_rf_default,test$md_earn_wne_p10)
+  defaultRMSE <- RMSE(predicted_rf_default,test$md_earn_wne_p10)
+  defaultMAE <- MAE(predicted_rf_default,test$md_earn_wne_p10,na.rm = TRUE)
+
+  #Random prediction
+  pred_rf_random <- predict(rf_random, type = "raw", newdata=test)
+  summary(pred_rf_random)
+
+  randomR2 <- R2(pred_rf_random,test$md_earn_wne_p10)
+  randomMAE <- MAE(pred_rf_random,test$md_earn_wne_p10)
+  randomRMSE <- RMSE(pred_rf_random,test$md_earn_wne_p10)
+
+  #Grid Search prediction
+  predicted_rf_search <- predict(rf_gridsearch,type="raw", newdata=test)
+  summary(predicted_rf_search)
+
+  gridR2 <- R2(predicted_rf_search,test$md_earn_wne_p10)
+  gridMAE <- MAE(predicted_rf_search,test$md_earn_wne_p10)
+  gridRMSE <- RMSE(predicted_rf_search,test$md_earn_wne_p10,na.rm = TRUE)
+
+
+  #Accuracy Measures Data frame
+  Methods <- c("Default","Random","Grid Search")
+  MAEList <- c(defaultMAE,randomMAE,gridMAE)
+  RMSEList <- c(defaultRMSE,randomRMSE,gridRMSE)
+  RSquaredList <- c(defaultR2,randomR2,gridR2)
+
+  test_measures_rf <- data.frame(Methods,MAEList,RMSEList,RSquaredList)
+  names(test_measures_rf)[names(test_measures_rf)=="Methods"] <- "Methods"
+  names(test_measures_rf)[names(test_measures_rf)=="MAE"] <- "MAE"
+  names(test_measures_rf)[names(test_measures_rf)=="RMSE"] <- "RMSE"
+  names(test_measures_rf)[names(test_measures_rf)=="R2"] <- "R-Squared"
+
+  test_measures_rf <- formattable::formattable(test_measures_rf)
+  print(test_measures_rf)
+}
+
 
 
 
